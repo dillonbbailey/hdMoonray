@@ -38,7 +38,7 @@ endif()
 # * https://github.com/PixarAnimationStudios/OpenUSD/issues/3310
 # * https://github.com/PixarAnimationStudios/OpenUSD/pull/3205
 find_package(OpenGL REQUIRED)
-if(PXR_VERSION VERSION_GREATER_EQUAL 2505)
+if(TARGET hgiVulkan)
     find_package(Vulkan REQUIRED)
 endif()
 
