@@ -6,6 +6,12 @@
 #include <hydramoonray/RenderDelegate.h>
 #include <pxr/imaging/hd/rendererPlugin.h>
 #include <pxr/imaging/hd/rendererPluginRegistry.h>
+#if __has_include(<pxr/imaging/hd/rendererCreateArgs.h>)
+#include <pxr/imaging/hd/rendererCreateArgs.h>
+#define HDMOONRAY_HAS_RENDERER_CREATE_ARGS 1
+#else
+#define HDMOONRAY_HAS_RENDERER_CREATE_ARGS 0
+#endif
 
 #include <iostream>
 
@@ -43,6 +49,14 @@ public:
         delete renderDelegate;
     }
 
+#if HDMOONRAY_HAS_RENDERER_CREATE_ARGS
+    // Newer USD (e.g. 25.11) makes this overload pure virtual and deprecates
+    // the bool one below.
+    bool IsSupported(pxr::HdRendererCreateArgs const&,
+                     std::string* reasonWhyNot = nullptr) const override {
+        return true;
+    }
+#endif
 #if PXR_VERSION >= 2302
     bool IsSupported(bool gpuEnabled = true) const override {
         return true;

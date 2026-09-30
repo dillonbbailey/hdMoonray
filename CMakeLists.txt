@@ -14,6 +14,13 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 include(OMR_Platform)
 
+# A host application that embeds only the Hydra delegate (e.g. Maya) builds
+# against its own USD and does not want the command-line tools, tests, the
+# in-process debug delegate or the Houdini integration.
+option(HDMOONRAY_BUILD_CMD "Build cmd/ tools, hats tests and the testSuite" ON)
+option(HDMOONRAY_BUILD_DEBUG_PLUGIN "Build the in-process hd_moonray_debug delegate" ON)
+option(HDMOONRAY_BUILD_HOUDINI "Install the Houdini integration files" ON)
+
 # ================================================
 # Find dependencies
 # ================================================
@@ -65,9 +72,14 @@ if("${PROJECT_NAME}" STREQUAL "${CMAKE_PROJECT_NAME}")
     find_package(SceneRdl2 REQUIRED)
 endif()
 
-# Set the RPATH for binaries in the install tree
-set(CMAKE_INSTALL_RPATH ${GLOBAL_INSTALL_RPATH})
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+# Set the RPATH for binaries in the install tree. Prepend rather than set, so
+# entries from a parent project (e.g. absolute paths to prebuilt MoonRay libs)
+# survive but are searched after this project's own @loader_path entries.
+list(PREPEND CMAKE_INSTALL_RPATH ${GLOBAL_INSTALL_RPATH})
+# A parent project that needs a strict search order can turn this off.
+if(NOT DEFINED CMAKE_INSTALL_RPATH_USE_LINK_PATH)
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+endif()
 
 # if OPT_LEVEL is set use its value to override the CMAKE_BUILD_TYPE because the
 # rez cmake plugin does not have an easy way to set the build_target.
@@ -100,9 +112,13 @@ include(SConscriptStub)
 # ================================================
 add_subdirectory(lib)
 add_subdirectory(plugin)
-add_subdirectory(cmd)
+if(HDMOONRAY_BUILD_CMD)
+    add_subdirectory(cmd)
+endif()
 add_subdirectory(sessions)
-add_subdirectory(hats)
+if(HDMOONRAY_BUILD_CMD)
+    add_subdirectory(hats)
+endif()
 
 # ================================================
 # Install
@@ -135,9 +151,11 @@ install(FILES
         ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}-${PROJECT_VERSION}
 )
 
-install(
-    DIRECTORY testSuite
-    DESTINATION .
-    USE_SOURCE_PERMISSIONS
-)
+if(HDMOONRAY_BUILD_CMD)
+    install(
+        DIRECTORY testSuite
+        DESTINATION .
+        USE_SOURCE_PERMISSIONS
+    )
+endif()
 
