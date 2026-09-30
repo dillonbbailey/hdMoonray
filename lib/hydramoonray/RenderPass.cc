@@ -88,7 +88,11 @@ RenderPass::_Execute(const pxr::HdRenderPassStateSharedPtr& renderPassState,
     scene_rdl2::rdl2::FloatVector motionSteps(2);
     auto usdDelegate = renderDelegate.usdImagingDelegate();
     if (usdDelegate) {
-        pxr::UsdTimeCode currTime = usdDelegate->GetTime();
+        // Not GetTime(): it is inline and reads UsdImagingDelegate::_time
+        // directly, whose offset depends on the TBB headers USD was built
+        // with. GetTimeWithOffset() is out of line, so it is safe when the
+        // delegate is compiled against different TBB headers than USD (Maya).
+        pxr::UsdTimeCode currTime = usdDelegate->GetTimeWithOffset(0.0f);
         if (currTime.IsNumeric()) {
             frame = (float)currTime.GetValue();
             pxr::GfInterval interval = usdDelegate->GetCurrentTimeSamplingInterval();
