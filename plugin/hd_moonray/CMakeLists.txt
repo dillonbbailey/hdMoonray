@@ -19,6 +19,22 @@ target_sources(${component}
         RendererPlugin.cc
 )
 
+# With scene-index based imaging (the default in newer USD, and Maya's Hydra
+# viewport) implicit surfaces (sphere, cube, ...) need converting to meshes for
+# Moonray. Registered through plugInfo.json for the "Moonray" renderer.
+set(HDMOONRAY_EXTRA_PLUGIN_TYPES "")
+if(TARGET hdsi AND PXR_VERSION VERSION_GREATER_EQUAL 2408)
+    target_sources(${component} PRIVATE ImplicitSurfaceSceneIndexPlugin.cc)
+    target_link_libraries(${component} PUBLIC hdsi)
+    string(CONCAT HDMOONRAY_EXTRA_PLUGIN_TYPES
+        ",\n                    \"HdMoonrayImplicitSurfaceSceneIndexPlugin\": {\n"
+        "                        \"bases\": [\"HdSceneIndexPlugin\"],\n"
+        "                        \"loadWithRenderer\": \"Moonray\",\n"
+        "                        \"priority\": 0,\n"
+        "                        \"displayName\": \"Moonray implicit surfaces to meshes\"\n"
+        "                    }")
+endif()
+
 target_include_directories(${component}
     PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

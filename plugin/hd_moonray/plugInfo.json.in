@@ -9,7 +9,7 @@
                         ],
                         "displayName": "Moonray",
                         "priority": 99
-                    }
+                    }@HDMOONRAY_EXTRA_PLUGIN_TYPES@
                 }
             },
             "Name": "hd_moonray",
