@@ -326,6 +326,12 @@ ArrasRenderer::resolve(scene_rdl2::rdl2::RenderOutput* ro, PixelData& pd)
     if (isBeauty(ro)) {
         mFbReceiver->getBeautyMTSafe(pd.vec, pd.mWidth, pd.mHeight);
         pd.mChannels = 4;
+    } else if (ro->getResult() == scene_rdl2::rdl2::RenderOutput::RESULT_DEPTH &&
+               mFbReceiver->getPixelInfoMTSafe(pd.vec, pd.mWidth, pd.mHeight)) {
+        // Over Arras, depth travels only in the PixelInfo buffer (sent when the mcrt
+        // computation has "enableDepthBuffer": true); the depth RenderOutput itself
+        // arrives as zeros. PixelInfo is linear camera depth, +inf where nothing was hit.
+        pd.mChannels = 1;
     } else {
         unsigned n = mFbReceiver->getRenderOutputMTSafe(ro->getName(), pd.vec, pd.mWidth, pd.mHeight);
         if (not n) return false; // ignore occasional bad data
