@@ -21,6 +21,12 @@ using scene_rdl2::logging::Logger;
 ArrasRenderer::ArrasRenderer()
 {
     mSceneContext = new scene_rdl2::rdl2::SceneContext();
+    // The client side only builds and serializes the scene; rendering happens in
+    // the Arras computation. Proxy mode loads the light *.so.proxy shader DSOs
+    // (scene_rdl2 + a few small libs) instead of the full ones, which would pull
+    // Embree, OIIO and OpenVDB into the host process - e.g. alongside Maya's own,
+    // different OIIO and OpenVDB.
+    mSceneContext->setProxyModeEnabled(true);
 
     arras4::sdk::SDK::configAthenaLogger();
 

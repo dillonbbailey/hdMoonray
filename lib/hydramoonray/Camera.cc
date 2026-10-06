@@ -44,6 +44,21 @@ const pxr::HdCamera::DirtyBits CamDirtyProj = pxr::HdCamera::DirtyBits::DirtyPro
 const pxr::HdCamera::DirtyBits CamDirtyView = pxr::HdCamera::DirtyBits::DirtyViewMatrix;
 #endif
 
+// rdl2::Camera::setFocalLength() is a virtual no-op in the base class: only the
+// full PerspectiveCamera DSO overrides it to set "focal". In proxy mode (used by
+// ArrasRenderer) the camera is a proxy object without that override, so the call
+// silently did nothing and the render used the 30mm default. Set the attribute by
+// name; only PerspectiveCamera has it (OrthographicCamera does not).
+bool hasFocal(const scene_rdl2::rdl2::Camera* camera)
+{
+    return camera->getSceneClass().getName() == "PerspectiveCamera";
+}
+
+void setFocal(scene_rdl2::rdl2::Camera* camera, float focal)
+{
+    if (hasFocal(camera)) camera->set("focal", focal);
+}
+
 }
 
 namespace hdMoonray {
@@ -241,7 +256,7 @@ Camera::updateCamera(pxr::HdSceneDelegate* sceneDelegate, RenderDelegate& render
         vertOffset *= adjustedAr;
 
         mCamera->set("film_width_aperture", (float)adjustedAperture[0]);
-        mCamera->setFocalLength(focalLength);
+        setFocal(mCamera, focalLength);
         mCamera->set("horizontal_film_offset", horizOffset);
         mCamera->set("vertical_film_offset", vertOffset);
         mCamera->setNear(mNear);
@@ -345,7 +360,7 @@ Camera::setAsPrimaryCamera(RenderDelegate& renderDelegate, double aspectRatio)
             primary->set("film_width_aperture", mCamera->get<float>("film_width_aperture"));
             primary->set("horizontal_film_offset", mCamera->get<float>("horizontal_film_offset"));
             primary->set("vertical_film_offset", mCamera->get<float>("vertical_film_offset"));
-            primary->setFocalLength(mCamera->get<float>("focal"));
+            if (hasFocal(mCamera)) setFocal(primary, mCamera->get<float>("focal"));
             primary->setNear(mNear);
             primary->setFar(mFar);
             mProjChanged = false;
