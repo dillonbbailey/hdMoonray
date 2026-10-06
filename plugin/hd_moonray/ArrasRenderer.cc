@@ -94,6 +94,13 @@ ArrasRenderer::~ArrasRenderer()
         std::lock_guard<std::mutex> guard(mMutex);
         mFbReceiver.reset();
     }
+    // Shut the SDK down explicitly, while mMutex and everything else its
+    // threads' callbacks use is still alive. Left to member destruction, mMutex
+    // (declared after mSDK) is destroyed first, and a frame arriving while the
+    // SDK joins its delivery thread locks a destroyed mutex ("mutex lock failed:
+    // Invalid argument" -> abort), e.g. when switching Maya's viewport away
+    // from Moonray while it renders.
+    mSDK.reset();
     delete mSceneContext;
 }
 
