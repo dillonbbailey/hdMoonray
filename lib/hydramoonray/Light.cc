@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "Light.h"
+#include <pxr/base/tf/stringUtils.h>
 #include "LightFilter.h"
 #include "Mesh.h"
 #include "RenderDelegate.h"
@@ -28,6 +29,31 @@ namespace {
 
 pxr::TfToken moonrayClassToken("moonray:class");
 pxr::TfToken spotLightToken("SpotLight");
+
+// Read a numeric light parameter as float. Hosts differ in the value type they
+// supply: usdImaging gives float, but Maya's Hydra (mayaHydra) can supply
+// double, which a plain IsHolding<float>() check silently ignored.
+bool getFloat(const pxr::VtValue& v, float& out)
+{
+    if (v.IsHolding<float>()) { out = v.UncheckedGet<float>(); return true; }
+    if (v.IsHolding<double>()) { out = static_cast<float>(v.UncheckedGet<double>()); return true; }
+    if (v.CanCast<float>()) { out = pxr::VtValue::Cast<float>(v).UncheckedGet<float>(); return true; }
+    return false;
+}
+
+// Look a light parameter up by its Hydra name and, if the host has nothing
+// under it, by the UsdLux attribute name ("inputs:" + name). mayaHydra answers
+// spot cone shaping only as inputs:shaping:cone:angle etc., so without the
+// fallback Maya spot lights became plain sphere lights.
+pxr::VtValue getLightParam(pxr::HdSceneDelegate* sceneDelegate, const pxr::SdfPath& id,
+                           const pxr::TfToken& name)
+{
+    pxr::VtValue v = sceneDelegate->GetLightParamValue(id, name);
+    if (v.IsEmpty() && !pxr::TfStringStartsWith(name.GetString(), "inputs:")) {
+        v = sceneDelegate->GetLightParamValue(id, pxr::TfToken("inputs:" + name.GetString()));
+    }
+    return v;
+}
 pxr::TfToken rectLightToken("RectLight");
 pxr::TfToken geometryLightToken("geometryLight");
 pxr::TfToken geometryToken("inputs:geometry");
@@ -70,7 +96,7 @@ Light::rdlClassName(const pxr::SdfPath& id,
     // identify the rdl light class to use. This can be specified via "token moonray::class =" or
     // deduced from the Lux/Usd type
     const std::string& luxRdlClass(defaultRdlClassName(mType));
-    pxr::VtValue v = sceneDelegate->GetLightParamValue(id, moonrayClassToken);
+    pxr::VtValue v = getLightParam(sceneDelegate, id, moonrayClassToken);
     bool isRectLight = false;
     if (v.IsHolding<pxr::TfToken>()) {
         pxr::TfToken classToken = v.UncheckedGet<pxr::TfToken>();
@@ -91,8 +117,9 @@ Light::rdlClassName(const pxr::SdfPath& id,
         return classToken.GetString();
     }
     // existence of shaping api makes a SpotLight
-    v = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->shapingConeAngle);
-    if (v.IsHolding<float>() && v.UncheckedGet<float>() < 90.0f) {
+    v = getLightParam(sceneDelegate, id, pxr::HdLightTokens->shapingConeAngle);
+    float coneAngleValue = 90.0f;
+    if (getFloat(v, coneAngleValue) && coneAngleValue < 90.0f) {
         if (mType != pxr::HdPrimTypeTokens->diskLight) {
             Logger::warn(id, ": shaping api may not be compatible with USD light type '", mType, "'");
         }
@@ -232,7 +259,7 @@ Light::syncParams(const pxr::SdfPath& id,
 
         // check if attr is set by a moonray::name property
         std::string moonrayName = "moonray:"+attrName;
-        pxr::VtValue val = sceneDelegate->GetLightParamValue(id, pxr::TfToken(moonrayName));
+        pxr::VtValue val = getLightParam(sceneDelegate, id, pxr::TfToken(moonrayName));
         if (!val.IsEmpty()) {
             ValueConverter::setAttribute(mLight, *it, val);
             continue;
@@ -259,18 +286,18 @@ Light::syncParams(const pxr::SdfPath& id,
 
             if (luxName == pxr::HdLightTokens->shapingConeAngle) {
                 float coneAngle = 90; // Lux default value
-                val = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->shapingConeAngle);
-                if (val.IsHolding<float>()) coneAngle = val.UncheckedGet<float>();
+                val = getLightParam(sceneDelegate, id, pxr::HdLightTokens->shapingConeAngle);
+                getFloat(val, coneAngle);
                 mLight->set(AttributeKey<float>(**it), 2 * coneAngle);
                 continue;
 
             } else if (luxName == pxr::HdLightTokens->shapingConeSoftness) {
                 float softness = 0; // Lux default value
-                val = sceneDelegate->GetLightParamValue(id, luxName);
-                if (val.IsHolding<float>()) softness = val.UncheckedGet<float>();
+                val = getLightParam(sceneDelegate, id, luxName);
+                getFloat(val, softness);
                 float coneAngle = 90; // Lux default value
-                val = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->shapingConeAngle);
-                if (val.IsHolding<float>()) coneAngle = val.UncheckedGet<float>();
+                val = getLightParam(sceneDelegate, id, pxr::HdLightTokens->shapingConeAngle);
+                getFloat(val, coneAngle);
                 float innerConeAngle = coneAngle;
                 if (softness > 0) {
                     innerConeAngle = (softness < 1) ? coneAngle * (1 - softness) : 0.0f;
@@ -282,23 +309,24 @@ Light::syncParams(const pxr::SdfPath& id,
                 // Since rect lights with shaping are converted to spotlights, we approximate
                 // the rect light area using the spotlight's lens_radius parameter.
                 float width = 1.0f;
-                val = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->width);
-                if (val.IsHolding<float>()) width = val.UncheckedGet<float>();
+                val = getLightParam(sceneDelegate, id, pxr::HdLightTokens->width);
+                getFloat(val, width);
                 float height = 1.0f;
-                val = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->height);
-                if (val.IsHolding<float>()) height = val.UncheckedGet<float>();
+                val = getLightParam(sceneDelegate, id, pxr::HdLightTokens->height);
+                getFloat(val, height);
                 const float radius = scene_rdl2::math::sqrt((width * height) / scene_rdl2::math::sPi);
                 mLight->set(AttributeKey<float>(**it), radius);
                 continue;
             } else if (luxName == pxr::HdLightTokens->color) {
                 pxr::GfVec3f color(1.0f);
-                val = sceneDelegate->GetLightParamValue(id, luxName);
+                val = getLightParam(sceneDelegate, id, luxName);
                 if (val.IsHolding<pxr::GfVec3f>()) color = val.UncheckedGet<pxr::GfVec3f>();
-                val = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->enableColorTemperature);
+                else if (val.IsHolding<pxr::GfVec3d>()) color = pxr::GfVec3f(val.UncheckedGet<pxr::GfVec3d>());
+                val = getLightParam(sceneDelegate, id, pxr::HdLightTokens->enableColorTemperature);
                 if (val.IsHolding<bool>() && val.UncheckedGet<bool>()) {
-                    val = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->colorTemperature);
-                    if (val.IsHolding<float>()) {
-                        const float temperature = val.UncheckedGet<float>();
+                    val = getLightParam(sceneDelegate, id, pxr::HdLightTokens->colorTemperature);
+                    float temperature = 0.0f;
+                    if (getFloat(val, temperature)) {
 
                         // This was originally using the function pxr::UsdLuxBlackbodyTemperatureAsRgb
                         // to do the conversion.   However there was a noticeable difference in the color
@@ -320,7 +348,7 @@ Light::syncParams(const pxr::SdfPath& id,
                     luxName = pxr::HdLightTokens->length;
                 }
                 // schema will cause correct default to be returned
-                val = sceneDelegate->GetLightParamValue(id, luxName);
+                val = getLightParam(sceneDelegate, id, luxName);
                 if (!val.IsEmpty()) {
                     ValueConverter::setAttribute(mLight, *it, val);
                     continue;
@@ -338,7 +366,7 @@ Light::syncFilterList(const pxr::SdfPath& id,
                       pxr::HdSceneDelegate *sceneDelegate,
                       RenderDelegate& renderDelegate)
 {
-    pxr::VtValue val = sceneDelegate->GetLightParamValue(id, pxr::TfToken(pxr::HdTokens->filters));
+    pxr::VtValue val = getLightParam(sceneDelegate, id, pxr::TfToken(pxr::HdTokens->filters));
     if (!val.IsHolding<pxr::SdfPathVector>()) {
         return;
     }
@@ -367,8 +395,9 @@ Light::Sync(pxr::HdSceneDelegate *sceneDelegate,
     // so treat intensity=0 as turning off the light. Also turn it off when lighting disabled.
     float intensity = 0.0f;
     if (not renderDelegate.getDisableLighting() && sceneDelegate->GetVisible(id)) {
-        pxr::VtValue val = sceneDelegate->GetLightParamValue(id, pxr::HdLightTokens->intensity);
-        intensity = val.IsHolding<float>() ? val.UncheckedGet<float>() : 1.0f;
+        pxr::VtValue val = getLightParam(sceneDelegate, id, pxr::HdLightTokens->intensity);
+        intensity = 1.0f;
+        getFloat(val, intensity);
     }
 
     bool initialize = false;
@@ -405,7 +434,7 @@ Light::Sync(pxr::HdSceneDelegate *sceneDelegate,
         // Currently Finalize() is called when value changes, but this may be a bug.
         bool categoriesChanged = false;
         pxr::TfToken t =
-            sceneDelegate->GetLightParamValue(id, pxr::HdTokens->lightLink).GetWithDefault<pxr::TfToken>();
+            getLightParam(sceneDelegate, id, pxr::HdTokens->lightLink).GetWithDefault<pxr::TfToken>();
         // registering the category id token with RenderDelegate will enable geometry
         // to look up mLight as the rdl2 scene object corresponding to this category id
         if (initialize || t != mLightLinkCategory) {
@@ -417,7 +446,7 @@ Light::Sync(pxr::HdSceneDelegate *sceneDelegate,
             categoriesChanged = true;
         }
         // "shadowLink" is much the same
-        t = sceneDelegate->GetLightParamValue(id, pxr::HdTokens->shadowLink).GetWithDefault<pxr::TfToken>();
+        t = getLightParam(sceneDelegate, id, pxr::HdTokens->shadowLink).GetWithDefault<pxr::TfToken>();
         if (initialize || t != mShadowLinkCategory) {
             if (!initialize) {
                 renderDelegate.releaseCategory(mLight, RenderDelegate::CategoryType::ShadowLink, mShadowLinkCategory);
