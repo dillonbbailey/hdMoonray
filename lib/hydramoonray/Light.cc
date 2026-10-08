@@ -356,6 +356,18 @@ Light::syncParams(const pxr::SdfPath& id,
             }
         }
 
+        // MoonRay's "apply_scene_scale" (default true) makes a normalized light
+        // also divide by scene_scale^2 * pi - with the default scene_scale of 0.01
+        // that is ~3183x brighter than UsdLux "normalize", which divides by the
+        // world-space surface area only. Unless moonray:apply_scene_scale was
+        // authored (handled above), follow UsdLux. Hosts that don't send
+        // "normalize" at all (Maya's Hydra) get MoonRay's normalized=true, so
+        // their lights were overexposed by that factor.
+        if (attrName == "apply_scene_scale") {
+            mLight->set(AttributeKey<scene_rdl2::rdl2::Bool>(**it), false);
+            continue;
+        }
+
         // no setting, so reset to default
         ValueConverter::setDefault(mLight, *it);
     }
