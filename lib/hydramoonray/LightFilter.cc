@@ -87,6 +87,10 @@ LightFilter::syncProjector(const pxr::SdfPath& id,
     // requires the custom MoonrayLightFilterAdapter to work
     static pxr::TfToken projectorToken("moonray:projector");
     pxr::VtValue val = sceneDelegate->Get(id, projectorToken); // supplied by adapter
+    if (val.IsEmpty()) {
+        // scene-index imaging: the adapter supplies it as a light param
+        val = sceneDelegate->GetLightParamValue(id, projectorToken);
+    }
     if (val.IsHolding<pxr::SdfPath>()) {
         pxr::SdfPath path = val.UncheckedGet<pxr::SdfPath>();
         path.ReplacePrefix(pxr::SdfPath::AbsoluteRootPath(), sceneDelegate->GetDelegateID());
@@ -136,6 +140,10 @@ LightFilter::syncCombineFilters(const pxr::SdfPath& id,
     // requires the custom MoonrayLightFilterAdapter to work
     static pxr::TfToken filtersToken("moonray:light_filters");
     pxr::VtValue val = sceneDelegate->Get(id, filtersToken); // supplied by adapter
+    if (val.IsEmpty()) {
+        // scene-index imaging: the adapter supplies it as a light param
+        val = sceneDelegate->GetLightParamValue(id, filtersToken);
+    }
     if (val.IsHolding<pxr::SdfPathVector>()) {
         scene_rdl2::rdl2::SceneObjectVector rdlObjects;
         pxr::SdfPathVector pathVec = val.UncheckedGet<pxr::SdfPathVector>();

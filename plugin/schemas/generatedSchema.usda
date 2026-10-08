@@ -1,0 +1,114 @@
+#usda 1.0
+(
+    "Derived from usdLux's generatedSchema.usda (USD 25.11): GeometryLight and LightFilter, renamed. Codeless schema for hdMoonray's custom light prim types, so USD's adapter registry finds MoonrayMeshLightAdapter and MoonrayLightFilterAdapter."
+)
+
+class GeometryLight "MoonrayMeshLight" (
+    apiSchemas = ["LightAPI"]
+    customData = {
+        token[] apiSchemaOverridePropertyNames = ["light:shaderId"]
+        string userDocBrief = """A light that emits outwards from a geometric
+prim. Deprecated, use MeshLight instead."""
+    }
+    doc = "MoonRay mesh light: emits from the Mesh targeted by inputs:geometry. Imaged by hdMoonray's MoonrayMeshLightAdapter."
+)
+{
+    rel geometry (
+        customData = {
+            string userDocBrief = """Relationship to the geometry to use as the 
+light source."""
+        }
+    )
+    uniform token light:shaderId = "GeometryLight" (
+        customData = {
+            string userDocBrief = '''The shader ID for a GeometryLight 
+("GeometryLight").'''
+        }
+    )
+    rel proxyPrim (
+        customData = {
+            string userDocBrief = '''The proxyPrim relationship allows us to link a
+        prim whose purpose is "render" to its (single target)
+        purpose="proxy" prim.'''
+        }
+    )
+    uniform token purpose = "default" (
+        allowedTokens = ["default", "render", "proxy", "guide"]
+        customData = {
+            string userDocBrief = """Purpose is a classification of geometry into categories that 
+        can each be independently included or excluded from traversals of prims 
+        on a stage, such as rendering or bounding-box computation traversals."""
+        }
+    )
+    token visibility = "inherited" (
+        allowedTokens = ["inherited", "invisible"]
+        customData = {
+            string userDocBrief = '''Visibility is meant to be the simplest form of "pruning" 
+        visibility that is supported by most DCC apps.'''
+        }
+    )
+    uniform token[] xformOpOrder (
+        customData = {
+            string userDocBrief = """Encodes the sequence of transformation operations in the
+        order in which they should be pushed onto a transform stack while
+        visiting a UsdStage's prims in a graph traversal that will effect
+        the desired positioning for this prim and its descendant prims."""
+        }
+    )
+}
+
+class LightFilter "MoonrayLightFilter" (
+    apiSchemas = ["CollectionAPI:filterLink"]
+    customData = {
+        token[] apiSchemaOverridePropertyNames = ["collection:filterLink:includeRoot"]
+        string userDocBrief = """A light filter is used to modify the effect
+of a light."""
+    }
+    doc = "MoonRay light filter (moonray:class selects the RDL filter). Imaged by hdMoonray's MoonrayLightFilterAdapter."
+)
+{
+    uniform bool collection:filterLink:includeRoot = 1 (
+        customData = {
+            string userDocBrief = """The 'include root' setting for the
+filterLink collection, used when configuring light-linking."""
+        }
+    )
+    uniform token lightFilter:shaderId = "" (
+        customData = {
+            string userDocBrief = """The shader ID for a LightFilter 
+(the fallback value is no shader ID)."""
+        }
+        displayGroup = "Internal"
+    )
+    rel proxyPrim (
+        customData = {
+            string userDocBrief = '''The proxyPrim relationship allows us to link a
+        prim whose purpose is "render" to its (single target)
+        purpose="proxy" prim.'''
+        }
+    )
+    uniform token purpose = "default" (
+        allowedTokens = ["default", "render", "proxy", "guide"]
+        customData = {
+            string userDocBrief = """Purpose is a classification of geometry into categories that 
+        can each be independently included or excluded from traversals of prims 
+        on a stage, such as rendering or bounding-box computation traversals."""
+        }
+    )
+    token visibility = "inherited" (
+        allowedTokens = ["inherited", "invisible"]
+        customData = {
+            string userDocBrief = '''Visibility is meant to be the simplest form of "pruning" 
+        visibility that is supported by most DCC apps.'''
+        }
+    )
+    uniform token[] xformOpOrder (
+        customData = {
+            string userDocBrief = """Encodes the sequence of transformation operations in the
+        order in which they should be pushed onto a transform stack while
+        visiting a UsdStage's prims in a graph traversal that will effect
+        the desired positioning for this prim and its descendant prims."""
+        }
+    )
+}
+

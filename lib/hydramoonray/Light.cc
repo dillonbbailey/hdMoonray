@@ -234,6 +234,10 @@ Light::syncParams(const pxr::SdfPath& id,
             // a geometry prim from a light is not anticipated. Correct solution is to use a
             // Mesh prim with LightAPI applied
             pxr::VtValue relval = sceneDelegate->Get(id, geometryToken);
+            if (!relval.IsHolding<pxr::SdfPath>()) {
+                // scene-index imaging: the adapter supplies it as a light param
+                relval = getLightParam(sceneDelegate, id, geometryToken);
+            }
             // This relies on our custom GeometryLight adapter, which returns a path taken from
             // the rel geometry property. It can be broken by the pxr adapter taking precedence,
             // which will simply report that GeometryLight is not supported yet.

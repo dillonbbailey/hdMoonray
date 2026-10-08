@@ -7,7 +7,9 @@
 #include <pxr/usdImaging/usdImaging/indexProxy.h>
 
 #include "pxr/imaging/hd/tokens.h"
-
+#if PXR_VERSION >= 2408
+#include "MoonrayAdapterDataSources.h"
+#endif
 
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -58,5 +60,32 @@ MoonrayLightFilterAdapter::Get(
     return BaseAdapter::Get(prim, cachePath, key, time, outIndices);
 }
 
+#if PXR_VERSION >= 2408
+HdContainerDataSourceHandle
+MoonrayLightFilterAdapter::GetImagingSubprimData(
+    UsdPrim const& prim, TfToken const& subprim,
+    const UsdImagingDataSourceStageGlobals& stageGlobals)
+{
+    HdContainerDataSourceHandle base = BaseAdapter::GetImagingSubprimData(prim, subprim, stageGlobals);
+    if (!subprim.IsEmpty()) {
+        return base;
+    }
+    // moonray:* attributes (incl. moonray:class) and the relationship targets.
+    return moonray_adapters::overlayMoonrayLightParams(
+        base, prim, stageGlobals, {{cookie_projector_token, false}, {combine_filters_token, true}});
+}
+
+HdDataSourceLocatorSet
+MoonrayLightFilterAdapter::InvalidateImagingSubprim(
+    UsdPrim const& prim, TfToken const& subprim, TfTokenVector const& properties,
+    UsdImagingPropertyInvalidationType invalidationType)
+{
+    HdDataSourceLocatorSet result =
+        BaseAdapter::InvalidateImagingSubprim(prim, subprim, properties, invalidationType);
+    result.insert(moonray_adapters::moonrayLightParamLocators(
+        properties, {{cookie_projector_token, false}, {combine_filters_token, true}}));
+    return result;
+}
+#endif
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -38,6 +38,20 @@ public:
                         UsdTimeCode time, 
                         VtIntArray*
 ) const;
+#if PXR_VERSION >= 2408
+    // Scene index support (USD 25.x scene-index imaging, e.g. Maya's Hydra
+    // viewport). UsdImagingLightAdapter supplies the light data; this adds the
+    // sprim type and exposes "rel inputs:geometry" as a path data source.
+    TfTokenVector GetImagingSubprims(UsdPrim const& prim) override;
+    TfToken GetImagingSubprimType(UsdPrim const& prim, TfToken const& subprim) override;
+    HdContainerDataSourceHandle GetImagingSubprimData(
+        UsdPrim const& prim, TfToken const& subprim,
+        const UsdImagingDataSourceStageGlobals& stageGlobals) override;
+    HdDataSourceLocatorSet InvalidateImagingSubprim(
+        UsdPrim const& prim, TfToken const& subprim, TfTokenVector const& properties,
+        UsdImagingPropertyInvalidationType invalidationType) override;
+#endif
+
 protected:
     virtual void _RemovePrim(SdfPath const& cachePath,
                              UsdImagingIndexProxy* index) final;

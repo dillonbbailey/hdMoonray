@@ -6,6 +6,9 @@
 #include <pxr/usdImaging/usdImaging/indexProxy.h>
 #include <pxr/usdImaging/usdImaging/tokens.h>
 #include "pxr/imaging/hd/tokens.h"
+#if PXR_VERSION >= 2408
+#include "MoonrayAdapterDataSources.h"
+#endif
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -71,6 +74,44 @@ MoonrayMeshLightAdapter::Get(
     }
     return BaseAdapter::Get(prim, cachePath, key, time, outIndices);
 }
+
+#if PXR_VERSION >= 2408
+TfTokenVector
+MoonrayMeshLightAdapter::GetImagingSubprims(UsdPrim const& prim)
+{
+    return { TfToken() };
+}
+
+TfToken
+MoonrayMeshLightAdapter::GetImagingSubprimType(UsdPrim const& prim, TfToken const& subprim)
+{
+    return subprim.IsEmpty() ? geometryLightToken : TfToken();
+}
+
+HdContainerDataSourceHandle
+MoonrayMeshLightAdapter::GetImagingSubprimData(
+    UsdPrim const& prim, TfToken const& subprim,
+    const UsdImagingDataSourceStageGlobals& stageGlobals)
+{
+    HdContainerDataSourceHandle base = BaseAdapter::GetImagingSubprimData(prim, subprim, stageGlobals);
+    if (!subprim.IsEmpty()) {
+        return base;
+    }
+    // moonray:* attributes, and the emitting mesh from "rel inputs:geometry".
+    return moonray_adapters::overlayMoonrayLightParams(base, prim, stageGlobals, {{geometryToken, false}});
+}
+
+HdDataSourceLocatorSet
+MoonrayMeshLightAdapter::InvalidateImagingSubprim(
+    UsdPrim const& prim, TfToken const& subprim, TfTokenVector const& properties,
+    UsdImagingPropertyInvalidationType invalidationType)
+{
+    HdDataSourceLocatorSet result =
+        BaseAdapter::InvalidateImagingSubprim(prim, subprim, properties, invalidationType);
+    result.insert(moonray_adapters::moonrayLightParamLocators(properties, {{geometryToken, false}}));
+    return result;
+}
+#endif
 
 void
 MoonrayMeshLightAdapter::_RemovePrim(SdfPath const& cachePath,

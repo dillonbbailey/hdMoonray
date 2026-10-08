@@ -1,0 +1,34 @@
+{
+    "Plugins": [
+        {
+            "Name": "hdMoonraySchemas",
+            "Type": "resource",
+            "Root": ".",
+            "ResourcePath": ".",
+            "Info": {
+                "Types": {
+                    "UsdMoonrayMeshLight": {
+                        "alias": {
+                            "UsdSchemaBase": "MoonrayMeshLight"
+                        },
+                        "bases": [
+                            "UsdLuxGeometryLight"
+                        ],
+                        "schemaIdentifier": "MoonrayMeshLight",
+                        "schemaKind": "concreteTyped"
+                    },
+                    "UsdMoonrayLightFilter": {
+                        "alias": {
+                            "UsdSchemaBase": "MoonrayLightFilter"
+                        },
+                        "bases": [
+                            "UsdLuxLightFilter"
+                        ],
+                        "schemaIdentifier": "MoonrayLightFilter",
+                        "schemaKind": "concreteTyped"
+                    }
+                }
+            }
+        }
+    ]
+}

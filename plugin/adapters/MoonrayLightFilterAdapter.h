@@ -31,6 +31,17 @@ public:
                         UsdTimeCode time, 
                         VtIntArray* outIndices) const;
 
+#if PXR_VERSION >= 2408
+    // Scene index support: UsdImagingLightFilterAdapter supplies the filter;
+    // this exposes the "rel" properties the delegate reads with Get() as
+    // top-level path data sources.
+    HdContainerDataSourceHandle GetImagingSubprimData(
+        UsdPrim const& prim, TfToken const& subprim,
+        const UsdImagingDataSourceStageGlobals& stageGlobals) override;
+    HdDataSourceLocatorSet InvalidateImagingSubprim(
+        UsdPrim const& prim, TfToken const& subprim, TfTokenVector const& properties,
+        UsdImagingPropertyInvalidationType invalidationType) override;
+#endif
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
