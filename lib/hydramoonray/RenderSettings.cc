@@ -10,6 +10,9 @@
 #include <scene_rdl2/scene/rdl2/SceneVariables.h>
 #include <scene_rdl2/render/logging/logging.h>
 
+#include <cctype>
+#include <set>
+
 // If adding or changing the descriptors, the file
 // ../houdini/soho/parameters/HdMoonrayRendererPlugin_Viewport.ds must be updated to match
 
@@ -33,6 +36,45 @@ TF_DEFINE_PRIVATE_TOKENS(Tokens,
     (forcePolygon)
     (executionMode)
 );
+
+// MoonRay scene variables offered as viewport settings - the set in the
+// Houdini viewport parameters (HdMoonrayRendererPlugin_Viewport.ds). Their
+// descriptors use camelCase keys ("pixelSamples"), as the other settings do:
+// mayaHydra makes a Maya attribute and an option-box control per descriptor and
+// labels it with the key. apply() also accepts the USD render settings form
+// "moonray:sceneVariable:<name>" and Houdini's "sceneVariable_<name>".
+const std::pair<const char*, const char*> sSceneVariables[] = {
+    {"sampling_mode",            "Sampling Mode"},
+    {"pixel_samples",            "Pixel Samples"},
+    {"min_adaptive_samples",     "Min Adaptive Samples"},
+    {"max_adaptive_samples",     "Max Adaptive Samples"},
+    {"target_adaptive_error",    "Target Adaptive Error"},
+    {"sample_clamping_depth",    "Sample Clamping Depth"},
+    {"sample_clamping_value",    "Sample Clamping Value"},
+    {"max_depth",                "Max Depth"},
+    {"max_diffuse_depth",        "Max Diffuse Depth"},
+    {"max_glossy_depth",         "Max Glossy Depth"},
+    {"max_mirror_depth",         "Max Mirror Depth"},
+    {"max_hair_depth",           "Max Hair Depth"},
+    {"max_presence_depth",       "Max Presence Depth"},
+    {"max_volume_depth",         "Max Volume Depth"},
+    {"texture_cache_size",       "Texture Cache Size"},
+    {"enable_presence_shadows",  "Enable Presence Shadows"},
+};
+
+// "pixel_samples" -> "pixelSamples"
+TfToken
+settingKey(const std::string& sceneVariable)
+{
+    std::string key;
+    bool upper = false;
+    for (char c : sceneVariable) {
+        if (c == '_') { upper = true; continue; }
+        key += upper ? char(std::toupper(c)) : c;
+        upper = false;
+    }
+    return TfToken(key);
+}
 
 }
 
@@ -62,6 +104,43 @@ RenderSettings::addDescriptors(HdRenderSettingDescriptorList& descriptorList) co
     };
     for (const auto& desc : descriptors) {
         descriptorList.push_back(desc);
+    }
+
+    // The scene variables above; types and defaults from MoonRay's SceneVariables
+    // class, so an untouched setting changes nothing.
+    using scene_rdl2::rdl2::Attribute;
+    const scene_rdl2::rdl2::SceneClass& sceneClass =
+        mDelegate.acquireSceneContext().getSceneVariables().getSceneClass();
+    for (const auto& [name, label] : sSceneVariables) {
+        const Attribute* attr = nullptr;
+        try {
+            attr = sceneClass.getAttribute(name);
+        } catch (const std::exception&) {
+            continue; // not in this MoonRay version
+        }
+        VtValue value;
+        switch (attr->getType()) {
+        case scene_rdl2::rdl2::TYPE_BOOL:
+            value = VtValue(bool(attr->getDefaultValue<scene_rdl2::rdl2::Bool>())); break;
+        case scene_rdl2::rdl2::TYPE_INT:
+            value = VtValue(int(attr->getDefaultValue<scene_rdl2::rdl2::Int>())); break;
+        case scene_rdl2::rdl2::TYPE_FLOAT:
+            value = VtValue(float(attr->getDefaultValue<scene_rdl2::rdl2::Float>())); break;
+        case scene_rdl2::rdl2::TYPE_STRING:
+            value = VtValue(attr->getDefaultValue<scene_rdl2::rdl2::String>()); break;
+        default:
+            continue;
+        }
+        // Enums are plain ints in UIs built from descriptors: name the values.
+        std::string text = label;
+        if (attr->isEnumerable()) {
+            std::string values;
+            for (auto it = attr->beginEnumValues(); it != attr->endEnumValues(); ++it) {
+                values += (values.empty() ? "" : ", ") + std::to_string(it->first) + " " + it->second;
+            }
+            text += " (" + values + ")";
+        }
+        descriptorList.push_back({text, settingKey(name), value});
     }
 }
 VtValue
@@ -96,6 +175,12 @@ void RenderSettings::apply()
         "camera", "motion_steps", "enable_motion_blur", "layer", "image_width", "image_height"
     };
 
+    static const std::set<std::string> sViewportSceneVariables = [] {
+        std::set<std::string> names;
+        for (const auto& entry : sSceneVariables) names.insert(entry.first);
+        return names;
+    }();
+
     scene_rdl2::rdl2::SceneVariables& sv = mDelegate.acquireSceneContext().getSceneVariables();
     {
         UpdateGuard guard(sv);
@@ -107,14 +192,15 @@ void RenderSettings::apply()
 
             TfToken key = TfToken("moonray:sceneVariable:" + attrName);
             VtValue val = mDelegate.GetRenderSetting(key);
-            if (not val.IsEmpty()) {
-                ValueConverter::setAttribute(&sv, *it, val);
-            } else {
+            if (val.IsEmpty()) {
                 key = TfToken("sceneVariable_" + attrName);
                 val = mDelegate.GetRenderSetting(key);
-                if (not val.IsEmpty()) {
-                    ValueConverter::setAttribute(&sv, *it, val);
-                }
+            }
+            if (val.IsEmpty() && sViewportSceneVariables.count(attrName)) {
+                val = mDelegate.GetRenderSetting(settingKey(attrName));
+            }
+            if (not val.IsEmpty()) {
+                ValueConverter::setAttribute(&sv, *it, val);
             }
         }
 
