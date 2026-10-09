@@ -133,7 +133,11 @@ BasisCurves::syncDisplayStyle(const HdDisplayStyle& style)
                                                       rdlCurvesSubtype_rayFacing);
     }
     if (not isPrimvarUsed(tessellationRateToken)) {
-        int tessellationRate = (style.refineLevel < 1) ? TESS_RATE_LOW : TESS_RATE_NORMAL;
+        // At rate 1 a bezier span (4 cvs) is a single segment between its end
+        // points - the curve collapses to its chord - so bezier stays at the
+        // normal rate. syncTopology() has already set curve_type.
+        const bool bezier = geometry()->get<scene_rdl2::rdl2::Int>(rdlAttrCurveType) == rdlCurveType_bezier;
+        int tessellationRate = (style.refineLevel < 1 && not bezier) ? TESS_RATE_LOW : TESS_RATE_NORMAL;
         geometry()->set(rdlAttrTessellationRate, tessellationRate);
     }
 }

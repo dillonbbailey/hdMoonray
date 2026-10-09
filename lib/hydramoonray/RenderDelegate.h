@@ -352,6 +352,7 @@ private:
 
     std::mutex mCategoriesMutex;
     std::mutex mCreateMutex;
+    std::mutex mCreateClassMutex; // serializes first-time SceneClass creation
 
     std::string mRdlOutput;
     pxr::TfTokenVector mRenderTags;

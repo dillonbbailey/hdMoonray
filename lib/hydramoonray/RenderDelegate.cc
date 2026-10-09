@@ -431,7 +431,15 @@ RenderDelegate::createSceneObject(const std::string& className, const std::strin
 {
     // for now rely on sceneContext reusing existing object
     try {
-        return acquireSceneContext().createSceneObject(className, id);
+        scene_rdl2::rdl2::SceneContext& sc = acquireSceneContext();
+        // SceneContext only locks per class, so two new classes could be
+        // declared in parallel (Hydra syncs rprims concurrently), running
+        // their DSOs' rdl2_declare at the same time. That corrupted the heap.
+        if (not sc.sceneClassExists(className)) {
+            std::lock_guard<std::mutex> lock(mCreateClassMutex);
+            return sc.createSceneObject(className, id);
+        }
+        return sc.createSceneObject(className, id);
     } catch (const scene_rdl2::except::TypeError& e) {
         // assume this error is a className collision, try again with a different name
         Logger::info(e.what());
@@ -481,19 +489,18 @@ RenderDelegate::defaultMaterial()
     if (not mDefaultMaterial) {
         std::lock_guard<std::mutex> lock(mCreateMutex);
         if (not mDefaultMaterial) {
-            scene_rdl2::rdl2::SceneContext& wsc = acquireSceneContext();
-            scene_rdl2::rdl2::Map* displayColor = wsc.createSceneObject("AttributeMap", "displayColor")->asA<scene_rdl2::rdl2::Map>();
+            scene_rdl2::rdl2::Map* displayColor = createSceneObject("AttributeMap", "displayColor")->asA<scene_rdl2::rdl2::Map>();
             {   UpdateGuard guard(displayColor);
                 displayColor->set("primitive_attribute_name", std::string("displayColor"));
                 // displayColor->set("primitive_attribute_type", 3); // color
                 displayColor->set("default_value", scene_rdl2::rdl2::Rgb(0.5f,0.5f,0.5f)); // default from hdSt/shaders/mesh.glslfx
             }
-            scene_rdl2::rdl2::Map* displayOpacity = wsc.createSceneObject("AttributeMap", "displayOpacity")->asA<scene_rdl2::rdl2::Map>();
+            scene_rdl2::rdl2::Map* displayOpacity = createSceneObject("AttributeMap", "displayOpacity")->asA<scene_rdl2::rdl2::Map>();
             {   UpdateGuard guard(displayOpacity);
                 displayOpacity->set("primitive_attribute_name", std::string("displayOpacity"));
                 displayOpacity->set("primitive_attribute_type", 0); // FLOAT
             }
-            mDefaultMaterial = wsc.createSceneObject("UsdPreviewSurface", "defaultMaterial")->asA<scene_rdl2::rdl2::Material>();
+            mDefaultMaterial = createSceneObject("UsdPreviewSurface", "defaultMaterial")->asA<scene_rdl2::rdl2::Material>();
             UpdateGuard guard(mDefaultMaterial);
             mDefaultMaterial->set("diffuseColor", scene_rdl2::rdl2::Rgb(1.0f,1.0f,1.0f));
             mDefaultMaterial->setBinding("diffuseColor", displayColor);
@@ -510,8 +517,7 @@ RenderDelegate::errorMaterial()
     if (not mErrorMaterial) {
         std::lock_guard<std::mutex> lock(mCreateMutex);
         if (not mErrorMaterial) {
-            scene_rdl2::rdl2::SceneContext& wsc = acquireSceneContext();
-            mErrorMaterial = wsc.createSceneObject("UsdPreviewSurface", "errorMaterial")->asA<scene_rdl2::rdl2::Material>();
+            mErrorMaterial = createSceneObject("UsdPreviewSurface", "errorMaterial")->asA<scene_rdl2::rdl2::Material>();
             UpdateGuard guard(mErrorMaterial);
             mErrorMaterial->set("diffuseColor", scene_rdl2::rdl2::Rgb(1.0f, 0.0f, 1.0f));
         }
@@ -525,8 +531,7 @@ RenderDelegate::defaultVolumeShader()
     if (not mDefaultVolumeShader) {
         std::lock_guard<std::mutex> lock(mCreateMutex);
         if (not mDefaultVolumeShader) {
-            scene_rdl2::rdl2::SceneContext& wsc = acquireSceneContext();
-            mDefaultVolumeShader = wsc.createSceneObject("BaseVolume", "defaultVolumeShader")->asA<scene_rdl2::rdl2::VolumeShader>();
+            mDefaultVolumeShader = createSceneObject("BaseVolume", "defaultVolumeShader")->asA<scene_rdl2::rdl2::VolumeShader>();
         }
     }
     return mDefaultVolumeShader;
@@ -593,8 +598,7 @@ RenderDelegate::updateAssignmentFromCategories(
     if (not mNumLights && not mDefaultLight) {        
         std::lock_guard<std::mutex> lock(mCreateMutex);
         if (not mDefaultLight) {
-            scene_rdl2::rdl2::SceneContext& wsc = acquireSceneContext();
-            scene_rdl2::rdl2::Light* defaultLight = wsc.createSceneObject("EnvLight", "defaultLight")->asA<scene_rdl2::rdl2::Light>();
+            scene_rdl2::rdl2::Light* defaultLight = createSceneObject("EnvLight", "defaultLight")->asA<scene_rdl2::rdl2::Light>();
             setCategory(defaultLight, CategoryType::LightLink, pxr::TfToken());
             setCategory(defaultLight, CategoryType::ShadowLink, pxr::TfToken());
             UpdateGuard guard(*this, defaultLight);

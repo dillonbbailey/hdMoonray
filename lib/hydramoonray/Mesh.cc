@@ -268,22 +268,37 @@ Mesh::syncSubdivTags(const PxOsdSubdivTags& tags)
     if (not vi.empty()) {
         // Hydra has connected strings of edges. Convert to RdlMesh individual edges
         VtIntArray lengths(tags.GetCreaseLengths());
-        const size_t edges = vi.size() - lengths.size();
         VtFloatArray vf = tags.GetCreaseWeights();
+        // Count edges from the lengths, clamped to the indices actually present:
+        // lengths that sum past the index array (seen in the wild) used to write
+        // past the end of result/weights and corrupt the heap.
+        size_t edges = 0;
+        for (size_t crease = 0, i = 0; crease < lengths.size() && i < vi.size(); ++crease) {
+            const size_t n = std::min<size_t>(std::max(lengths[crease], 0), vi.size() - i);
+            edges += n > 0 ? n - 1 : 0;
+            i += n;
+        }
         bool weightPerEdge = vf.size() >= edges;
-        IntVector result(2 * edges);
-        FloatVector weights(edges);
+        IntVector result;
+        FloatVector weights;
+        result.reserve(2 * edges);
+        weights.reserve(edges);
         size_t i = 0; // index into crease indices
-        size_t edge = 0; // index into result
-        for (size_t crease = 0; crease < lengths.size(); ++crease) {
-            int n = lengths[crease];
-            for (int k = 0; k + 1 < n; k++) {
-                result[2*edge] = vi[i];
-                result[2*edge + 1] = vi[i + 1];
-                weights[edge] = weightPerEdge ? vf[edge] : vf[crease];
+        size_t edge = 0; // index of the edge being added
+        for (size_t crease = 0; crease < lengths.size() && i < vi.size(); ++crease) {
+            const size_t n = std::min<size_t>(std::max(lengths[crease], 0), vi.size() - i);
+            for (size_t k = 0; k + 1 < n; k++) {
+                result.push_back(vi[i]);
+                result.push_back(vi[i + 1]);
+                const size_t w = weightPerEdge ? edge : crease;
+                weights.push_back(w < vf.size() ? vf[w] : 0.0f);
                 ++i; ++edge;
             }
             ++i; // don't connect last point with first of next edge
+        }
+        if (vf.size() != edges && vf.size() != lengths.size()) {
+            Logger::warn(GetId(), ": crease sharpness count ", vf.size(), " matches neither ",
+                         edges, " edges nor ", lengths.size(), " creases");
         }
         geometry()->set(rdlAttrSubdCreaseIndices, result);
         geometry()->set(rdlAttrSubdCreaseSharpnesses, weights);
@@ -295,9 +310,9 @@ Mesh::syncSubdivTags(const PxOsdSubdivTags& tags)
 
     vi = tags.GetCornerIndices();
     if (not vi.empty()) {
-        geometry()->set(rdlAttrSubdCornerIndices, IntVector(&vi[0], &vi[0] + vi.size()));
+        geometry()->set(rdlAttrSubdCornerIndices, IntVector(vi.cbegin(), vi.cend()));
         VtFloatArray vf = tags.GetCornerWeights();
-        geometry()->set(rdlAttrSubdCornerSharpnesses, FloatVector(&vf[0], &vf[0] + vf.size()));
+        geometry()->set(rdlAttrSubdCornerSharpnesses, FloatVector(vf.cbegin(), vf.cend()));
     } else {
         // geometry()->resetToDefault("subd_corner_indices");
         // geometry()->resetToDefault("subd_corner_sharpnesses");

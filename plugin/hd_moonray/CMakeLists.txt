@@ -20,11 +20,14 @@ target_sources(${component}
 )
 
 # With scene-index based imaging (the default in newer USD, and Maya's Hydra
-# viewport) implicit surfaces (sphere, cube, ...) need converting to meshes for
-# Moonray. Registered through plugInfo.json for the "Moonray" renderer.
+# viewport) implicit surfaces (sphere, cube, ...) and NURBS need converting to
+# meshes / basis curves for Moonray. Registered through plugInfo.json for the
+# "Moonray" renderer.
 set(HDMOONRAY_EXTRA_PLUGIN_TYPES "")
 if(TARGET hdsi AND PXR_VERSION VERSION_GREATER_EQUAL 2408)
-    target_sources(${component} PRIVATE ImplicitSurfaceSceneIndexPlugin.cc)
+    target_sources(${component} PRIVATE
+        ImplicitSurfaceSceneIndexPlugin.cc
+        NurbsApproximatingSceneIndexPlugin.cc)
     target_link_libraries(${component} PUBLIC hdsi)
     string(CONCAT HDMOONRAY_EXTRA_PLUGIN_TYPES
         ",\n                    \"HdMoonrayImplicitSurfaceSceneIndexPlugin\": {\n"
@@ -32,6 +35,12 @@ if(TARGET hdsi AND PXR_VERSION VERSION_GREATER_EQUAL 2408)
         "                        \"loadWithRenderer\": \"Moonray\",\n"
         "                        \"priority\": 0,\n"
         "                        \"displayName\": \"Moonray implicit surfaces to meshes\"\n"
+        "                    }"
+        ",\n                    \"HdMoonrayNurbsApproximatingSceneIndexPlugin\": {\n"
+        "                        \"bases\": [\"HdSceneIndexPlugin\"],\n"
+        "                        \"loadWithRenderer\": \"Moonray\",\n"
+        "                        \"priority\": 0,\n"
+        "                        \"displayName\": \"Moonray NURBS to basis curves and meshes\"\n"
         "                    }")
 endif()
 
