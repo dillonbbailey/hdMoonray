@@ -216,7 +216,8 @@ colorTemperatureToRGB(float kelvin)
                         scene_rdl2::math::clamp(b, 0.0f, 1.0f));
 }
 
-// Lights that stand for point sources, rendered as Arnold renders them.
+// Light conventions that differ from Arnold's, for lights Maya users compare with
+// Arnold (MoonRay/Arnold measured with building/macOSMaya/calibration/compare-arnold.py).
 void
 Light::syncPointEmitter(const pxr::SdfPath& id,
                         pxr::HdSceneDelegate *sceneDelegate,
@@ -242,8 +243,19 @@ Light::syncPointEmitter(const pxr::SdfPath& id,
     // radius, and MoonRay made that its emitting disc. Arnold renders Maya spots as
     // point sources; so does this. Normalized, the on-axis intensity stays the same.
     static const std::string mayaLights("/MayaHydraViewportRenderer/");
-    if (rdlClass == "SpotLight" && id.GetString().compare(0, mayaLights.size(), mayaLights) == 0) {
+    const bool mayaLight = id.GetString().compare(0, mayaLights.size(), mayaLights) == 0;
+    if (rdlClass == "SpotLight" && mayaLight) {
         mLight->set("lens_radius", 0.01f);
+    }
+
+    // Maya directional lights: Arnold (MtoA) takes a normalized distant light's
+    // intensity as the irradiance it delivers, but MoonRay normalizes so that a white
+    // Lambertian surface facing the light reflects radiance equal to the intensity,
+    // i.e. irradiance = pi * intensity. Only for Maya's lights: USD distant lights keep
+    // MoonRay's convention (and USD's default normalize = false is plain radiance).
+    if (rdlClass == "DistantLight" && mayaLight &&
+        mLight->get<scene_rdl2::rdl2::Bool>("normalized")) {
+        mLight->set(scene_rdl2::rdl2::Light::sIntensityKey, intensity / scene_rdl2::math::sPi);
     }
 }
 
