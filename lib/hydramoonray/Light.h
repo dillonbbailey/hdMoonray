@@ -41,6 +41,7 @@ private:
 
     void syncXform(const pxr::SdfPath& id,
                    pxr::HdSceneDelegate *sceneDelegate);
+    void syncPointEmitter(const pxr::SdfPath& id, pxr::HdSceneDelegate *sceneDelegate, float intensity);
     void syncParams(const pxr::SdfPath& id,
                     pxr::HdSceneDelegate *sceneDelegate,
                     RenderDelegate& renderDelegate);

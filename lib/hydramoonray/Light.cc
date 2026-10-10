@@ -216,6 +216,37 @@ colorTemperatureToRGB(float kelvin)
                         scene_rdl2::math::clamp(b, 0.0f, 1.0f));
 }
 
+// Lights that stand for point sources, rendered as Arnold renders them.
+void
+Light::syncPointEmitter(const pxr::SdfPath& id,
+                        pxr::HdSceneDelegate *sceneDelegate,
+                        float intensity)
+{
+    const std::string& rdlClass = mLight->getSceneClass().getName();
+
+    // UsdLux treatAsPoint (mayaHydra sets it for Maya point lights): the intensity is
+    // the light's radiant intensity, as Arnold (and HdArnold) render point lights,
+    // whatever the radius and normalize. A normalized SphereLight divides by its whole
+    // surface (4 pi r^2), but a sphere of radiance L has radiant intensity L pi r^2, so
+    // it emitted a quarter of that.
+    if (rdlClass == "SphereLight") {
+        pxr::VtValue v = getLightParam(sceneDelegate, id, pxr::TfToken("treatAsPoint"));
+        if (v.IsHolding<bool>() && v.UncheckedGet<bool>()) {
+            mLight->set("normalized", true);
+            mLight->set(scene_rdl2::rdl2::Light::sIntensityKey, 4.0f * intensity);
+        }
+    }
+
+    // Maya spot lights (mayaHydra's light prims): mayaHydra gives them a radius of
+    // tan(cone angle / 2) * 1.3, a viewport display value rather than Maya's light
+    // radius, and MoonRay made that its emitting disc. Arnold renders Maya spots as
+    // point sources; so does this. Normalized, the on-axis intensity stays the same.
+    static const std::string mayaLights("/MayaHydraViewportRenderer/");
+    if (rdlClass == "SpotLight" && id.GetString().compare(0, mayaLights.size(), mayaLights) == 0) {
+        mLight->set("lens_radius", 0.01f);
+    }
+}
+
 void
 Light::syncParams(const pxr::SdfPath& id,
                   pxr::HdSceneDelegate *sceneDelegate,
@@ -407,6 +438,21 @@ Light::Sync(pxr::HdSceneDelegate *sceneDelegate,
 
     RenderDelegate& renderDelegate(RenderDelegate::get(renderParam));
 
+    if (hdmLogEnabled()) {
+        // The UsdLux values this light arrives with (debugging translations,
+        // e.g. how mayaHydra maps Maya lights).
+        std::string line = "LightParams " + id.GetString() + " type=" + mType.GetString();
+        for (const pxr::TfToken& name : {pxr::HdLightTokens->intensity, pxr::HdLightTokens->exposure,
+                 pxr::HdLightTokens->normalize, pxr::HdLightTokens->radius, pxr::TfToken("treatAsPoint"),
+                 pxr::HdLightTokens->width, pxr::HdLightTokens->height,
+                 pxr::HdLightTokens->shapingConeAngle, pxr::HdLightTokens->shapingConeSoftness,
+                 pxr::HdLightTokens->shapingFocus}) {
+            pxr::VtValue v = getLightParam(sceneDelegate, id, name);
+            if (!v.IsEmpty()) line += " " + name.GetString() + "=" + pxr::TfStringify(v);
+        }
+        hdmLogMessage(line);
+    }
+
     // HDM-125: usdview sets the intensity of lights to 0.0f if "Enable Scene Lights" is turned off,
     // so treat intensity=0 as turning off the light. Also turn it off when lighting disabled.
     float intensity = 0.0f;
@@ -440,6 +486,7 @@ Light::Sync(pxr::HdSceneDelegate *sceneDelegate,
         setOn(intensity > 0, renderDelegate);
         mLight->set(scene_rdl2::rdl2::Light::sIntensityKey, intensity);
         syncParams(id, sceneDelegate, renderDelegate);
+        syncPointEmitter(id, sceneDelegate, intensity);
         syncFilterList(id, sceneDelegate, renderDelegate);
         // querying "lightLink" will return a token used to name the "category" that
         // holds all geometry that this light links to. This value will later be

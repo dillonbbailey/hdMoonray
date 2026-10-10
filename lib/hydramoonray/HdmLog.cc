@@ -68,6 +68,19 @@ void hdmLogSyncStart(const std::string& type, const pxr::SdfPath& id, pxr::HdDir
     }
 }
 
+bool hdmLogEnabled()
+{
+    return HdmLogInfo::getStream() != nullptr;
+}
+
+void hdmLogMessage(const std::string& msg)
+{
+    if (std::ostream* stream = HdmLogInfo::getStream()) {
+        (*stream) << (msg + "\n");
+        stream->flush();
+    }
+}
+
 void hdmLogSyncEnd(const pxr::SdfPath& id)
 {
     if (std::ostream* stream = HdmLogInfo::getStream()) {

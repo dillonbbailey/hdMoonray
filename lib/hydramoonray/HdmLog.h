@@ -15,5 +15,10 @@ void hdmLogRenderBuffer(const std::string& msg,const pxr::SdfPath& id);
 
 void hdmLogArras(const std::string& msg);
 
+// True when HDM_LOG_FILE is set; check before building expensive messages.
+bool hdmLogEnabled();
+// One line, as given.
+void hdmLogMessage(const std::string& msg);
+
 }
 
